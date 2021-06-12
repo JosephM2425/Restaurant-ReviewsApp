@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Fragment } from 'react';
 import axios from 'axios'
 import Header from './Header'
+import ReviewForm from './ReviewForm'
+import Review from './Review'
 import styled from 'styled-components'
 
 const Wrapper = styled.div`
@@ -13,47 +15,102 @@ const Column = styled.div`
     background: #fff;
     height: 100vh;
     overflow: scroll;
+
+    &:last-child{
+        background: #000;
+    }
 `
-const Main = styled.div``
+const Main = styled.div`
+    padding-left: 50px;
+`
 
 const Restaurant = (props) => {
-    const [ restaurant, setRestaurant] = useState({})
-    const [ review, setReview] = useState({})
+    const [restaurant, setRestaurant] = useState({})
+    const [review, setReview] = useState({})
     const [loaded, setLoaded] = useState(false)
 
-    useEffect(()=>{
+    useEffect(() => {
         const slug = props.match.params.slug
         const url = `/api/v1/restaurants/${slug}`
-        //api/v1/restaurant/name-restaurant
-        // restaurants/name-restaurant
 
         axios.get(url)
-        .then(resp => {
-            setRestaurant(resp.data)
-            setLoaded(true) 
-        })
-        .catch(resp => console.log(resp))
-        
+            .then(resp => {
+                setRestaurant(resp.data)
+                setLoaded(true)
+            })
+            .catch(resp => console.log(resp))
+
     }, [])
 
+    const handleChange = (e) =>{
+        e.preventDefault()
+        
+        setReview(Object.assign({}, review, {[e.target.name]: e.target.value}))
+    }
+
+    const handleSubmit = (e) =>{
+        e.preventDefault()
+
+        const csrfToken = document.querySelector('[name=csrf-token]').content
+        axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfToken
+
+        const restaurant_id = restaurant.data.id
+        axios.post('/api/v1/reviews', {review, restaurant_id})
+        .then(resp => {
+            const included = [...restaurant.included, resp.data.data]
+            
+            setRestaurant({...restaurant, included})
+            setReview({title: '', description: '', score: 0})
+        })
+        .catch(resp => {})
+    }
+
+    const setRating = (score, e) => {
+        e.preventDefault()
+        
+        setReview({...review, score})
+    }
+
+    let reviews 
+    if (loaded && restaurant.included){
+        reviews = restaurant.included.map( (item, index) =>{
+            return(
+                <Review
+                    key={index}
+                    attributes={item.attributes}
+                />
+            )
+        })
+    }
+    
+
+
     return (
-        <div className="wrapper">
-            <div className="column">
-                <div className="main">
-                    { 
-                        loaded && 
-                        <Header 
-                            attributes= {restaurant.data.attributes}
-                            reviews= {restaurant.included}
+        <Wrapper>
+            {
+                loaded &&
+                <Fragment>
+                    <Column>
+                        <Main>
+                            <Header
+                                attributes={restaurant.data.attributes}
+                                reviews={restaurant.included}
+                            />
+                            {reviews}
+                        </Main>
+                    </Column>
+                    <Column>
+                        <ReviewForm 
+                            handleChange={handleChange}
+                            handleSubmit={handleSubmit}
+                            setRating={setRating}
+                            attributes={restaurant.data.attributes}
+                            review={review}
                         />
-                    }
-                    <div className="reviews"></div>
-                </div>
-            </div>
-            <div className="column">
-                <div className="review-form">[Reviews Form goes here]</div>
-            </div>
-        </div>
+                    </Column>
+                </Fragment>
+            }
+        </Wrapper>
     )
 }
 
